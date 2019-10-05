@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+
+  web:
+    build: ./web
+    depends_on:
+      - daemon
+    ports:
+      - "9051:80"
+
+  daemon:
+    build: .
+    ports:
+      - "9050:9050"
