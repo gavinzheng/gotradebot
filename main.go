@@ -11,7 +11,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	log "github.com/gavinzheng/gotradebot/logger"
 
 	"github.com/thrasher-corp/gocryptotrader/common"
 	"github.com/thrasher-corp/gocryptotrader/communications"
@@ -20,7 +19,7 @@ import (
 	"github.com/thrasher-corp/gocryptotrader/currency"
 	"github.com/thrasher-corp/gocryptotrader/currency/coinmarketcap"
 	exchange "github.com/thrasher-corp/gocryptotrader/exchanges"
-	//log "github.com/thrasher-corp/gocryptotrader/log"
+	log "github.com/thrasher-corp/gocryptotrader/logger"
 	"github.com/thrasher-corp/gocryptotrader/ntpclient"
 	"github.com/thrasher-corp/gocryptotrader/portfolio"
 )
@@ -55,7 +54,7 @@ func main() {
 	bot.shutdown = make(chan bool)
 	HandleInterrupt()
 
-	defaultPath, _, err := config.GetFilePath("")
+	defaultPath, err := config.GetFilePath("")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,7 +88,7 @@ func main() {
 
 	bot.config = &config.Cfg
 	log.Debugf("Loading config file %s..\n", bot.configFile)
-	err = bot.config.LoadConfig(bot.configFile,false)
+	err = bot.config.LoadConfig(bot.configFile)
 	if err != nil {
 		log.Fatalf("Failed to load config. Err: %s", err)
 	}
@@ -128,7 +127,7 @@ func main() {
 
 	log.Debugf("Starting communication mediums..")
 	cfg := bot.config.GetCommunicationsConfig()
-	bot.comms,err = communications.NewComm(&cfg)
+	bot.comms = communications.NewComm(&cfg)
 	bot.comms.GetEnabledCommunicationMediums()
 
 	var newFxSettings []currency.FXSettings
@@ -151,16 +150,15 @@ func main() {
 			CurrencyDelay:          bot.config.Currency.CurrencyFileUpdateDuration,
 			FxRateDelay:            bot.config.Currency.ForeignExchangeUpdateDuration,
 		},
-		bot.dataDir)
-	//,
-	//	*verbosity)
+		bot.dataDir,
+		*verbosity)
 	if err != nil {
 		log.Fatalf("currency updater system failed to start %v", err)
 
 	}
 
 	bot.portfolio = &portfolio.Portfolio
-	bot.portfolio.Seed(bot.config.Portfolio)  //???
+	bot.portfolio.SeedPortfolio(bot.config.Portfolio)  //???
 	SeedExchangeAccountInfo(GetAllEnabledExchangeAccountInfo().Data)
 
 	ActivateWebServer()
@@ -215,11 +213,11 @@ func ActivateConnectivityMonitor() {
 func ActivateNTP() {
 	if bot.config.NTPClient.Level != -1 {
 		bot.config.CheckNTPConfig()
-		NTPTime:= ntpclient.NTPClient(bot.config.NTPClient.Pool)
+		NTPTime, errNTP:= ntpclient.NTPClient(bot.config.NTPClient.Pool)
 		currentTime := time.Now()
-		//if errNTP != nil {
-		//	log.Warnf("NTPClient failed to create: %v", errNTP)
-		//} else
+		if errNTP != nil {
+			log.Warnf("NTPClient failed to create: %v", errNTP)
+		} else
 		{
 			NTPcurrentTimeDifference := NTPTime.Sub(currentTime)
 			configNTPTime := *bot.config.NTPClient.AllowedDifference
@@ -282,7 +280,7 @@ func Shutdown() {
 	}
 
 	if !bot.dryRun {
-		err := bot.config.SaveConfigToFile(bot.configFile)
+		err := bot.config.SaveConfig(bot.configFile)
 
 		if err != nil {
 			log.Warn("Unable to save config.")
